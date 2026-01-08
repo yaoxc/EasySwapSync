@@ -8,14 +8,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ProjectsTask/EasySwapBase/chain/chainclient"
-	"github.com/ProjectsTask/EasySwapBase/chain/types"
-	"github.com/ProjectsTask/EasySwapBase/logger/xzap"
-	"github.com/ProjectsTask/EasySwapBase/ordermanager"
-	"github.com/ProjectsTask/EasySwapBase/stores/gdb"
-	"github.com/ProjectsTask/EasySwapBase/stores/gdb/orderbookmodel/base"
-	"github.com/ProjectsTask/EasySwapBase/stores/gdb/orderbookmodel/multi"
-	"github.com/ProjectsTask/EasySwapBase/stores/xkv"
+	"github.com/yaoxc/EasySwapBase/chain/chainclient"
+	"github.com/yaoxc/EasySwapBase/chain/types"
+	"github.com/yaoxc/EasySwapBase/logger/xzap"
+	"github.com/yaoxc/EasySwapBase/ordermanager"
+	"github.com/yaoxc/EasySwapBase/stores/gdb"
+	"github.com/yaoxc/EasySwapBase/stores/gdb/orderbookmodel/base"
+	"github.com/yaoxc/EasySwapBase/stores/gdb/orderbookmodel/multi"
+	"github.com/yaoxc/EasySwapBase/stores/xkv"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	ethereumTypes "github.com/ethereum/go-ethereum/core/types"
@@ -26,8 +26,8 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
-	"github.com/ProjectsTask/EasySwapSync/service/comm"
-	"github.com/ProjectsTask/EasySwapSync/service/config"
+	"github.com/yaoxc/EasySwapSync/service/comm"
+	"github.com/yaoxc/EasySwapSync/service/config"
 )
 
 const (

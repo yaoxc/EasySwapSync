@@ -6,13 +6,13 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/ProjectsTask/EasySwapBase/chain/chainclient"
-	"github.com/ProjectsTask/EasySwapBase/chain/types"
-	"github.com/ProjectsTask/EasySwapBase/stores/gdb"
+	"github.com/yaoxc/EasySwapBase/chain/chainclient"
+	"github.com/yaoxc/EasySwapBase/chain/types"
+	"github.com/yaoxc/EasySwapBase/stores/gdb"
 	"github.com/ethereum/go-ethereum/common"
 	ethereumTypes "github.com/ethereum/go-ethereum/core/types"
 
-	"github.com/ProjectsTask/EasySwapSync/model"
+	"github.com/yaoxc/EasySwapSync/model"
 )
 
 func TestSyncEvent(t *testing.T) {

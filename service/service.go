@@ -5,21 +5,21 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/ProjectsTask/EasySwapBase/chain"
-	"github.com/ProjectsTask/EasySwapBase/chain/chainclient"
-	"github.com/ProjectsTask/EasySwapBase/ordermanager"
-	"github.com/ProjectsTask/EasySwapBase/stores/xkv"
+	"github.com/yaoxc/EasySwapBase/chain"
+	"github.com/yaoxc/EasySwapBase/chain/chainclient"
+	"github.com/yaoxc/EasySwapBase/ordermanager"
+	"github.com/yaoxc/EasySwapBase/stores/xkv"
 	"github.com/pkg/errors"
 	"github.com/zeromicro/go-zero/core/stores/cache"
 	"github.com/zeromicro/go-zero/core/stores/kv"
 	"github.com/zeromicro/go-zero/core/stores/redis"
 	"gorm.io/gorm"
 
-	"github.com/ProjectsTask/EasySwapSync/service/orderbookindexer"
+	"github.com/yaoxc/EasySwapSync/service/orderbookindexer"
 
-	"github.com/ProjectsTask/EasySwapSync/model"
-	"github.com/ProjectsTask/EasySwapSync/service/collectionfilter"
-	"github.com/ProjectsTask/EasySwapSync/service/config"
+	"github.com/yaoxc/EasySwapSync/model"
+	"github.com/yaoxc/EasySwapSync/service/collectionfilter"
+	"github.com/yaoxc/EasySwapSync/service/config"
 )
 
 type Service struct {

@@ -5,8 +5,8 @@ import (
 
 	"github.com/spf13/viper"
 
-	logging "github.com/ProjectsTask/EasySwapBase/logger"
-	"github.com/ProjectsTask/EasySwapBase/stores/gdb"
+	logging "github.com/yaoxc/EasySwapBase/logger"
+	"github.com/yaoxc/EasySwapBase/stores/gdb"
 )
 
 type Config struct {

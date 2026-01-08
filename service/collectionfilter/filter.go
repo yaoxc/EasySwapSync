@@ -5,12 +5,12 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/ProjectsTask/EasySwapBase/stores/gdb"
+	"github.com/yaoxc/EasySwapBase/stores/gdb"
 	"github.com/pkg/errors"
 
 	"gorm.io/gorm"
 
-	"github.com/ProjectsTask/EasySwapSync/service/comm"
+	"github.com/yaoxc/EasySwapSync/service/comm"
 )
 
 // Filter is a thread-safe structure to store a set of strings.

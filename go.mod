@@ -1,11 +1,10 @@
-module github.com/ProjectsTask/EasySwapSync
+module github.com/yaoxc/EasySwapSync
 
 go 1.21
 
-//replace github.com/ProjectsTask/EasySwapBase => ../EasySwapBase
+//replace github.com/yaoxc/EasySwapBase => ../EasySwapBase
 
 require (
-	github.com/ProjectsTask/EasySwapBase v0.0.0-20250106031001-016480cecbd5
 	github.com/ethereum/go-ethereum v1.12.0
 	github.com/mitchellh/go-homedir v1.1.0
 	github.com/pkg/errors v0.9.1

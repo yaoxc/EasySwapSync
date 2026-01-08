@@ -5,7 +5,7 @@ import (
 
 	"gorm.io/gorm"
 
-	"github.com/ProjectsTask/EasySwapBase/stores/gdb"
+	"github.com/yaoxc/EasySwapBase/stores/gdb"
 )
 
 func NewDB(ndb *gdb.Config) *gorm.DB {

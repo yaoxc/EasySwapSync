@@ -10,12 +10,12 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/ProjectsTask/EasySwapBase/logger/xzap"
+	"github.com/yaoxc/EasySwapBase/logger/xzap"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 
-	"github.com/ProjectsTask/EasySwapSync/service"
-	"github.com/ProjectsTask/EasySwapSync/service/config"
+	"github.com/yaoxc/EasySwapSync/service"
+	"github.com/yaoxc/EasySwapSync/service/config"
 )
 
 var DaemonCmd = &cobra.Command{
