@@ -10,10 +10,10 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/yaoxc/EasySwapBase/logger/xzap"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 
+	"github.com/yaoxc/EasySwapBase/logger/xzap"
 	"github.com/yaoxc/EasySwapSync/service"
 	"github.com/yaoxc/EasySwapSync/service/config"
 )

@@ -11,6 +11,7 @@ require (
 	github.com/shopspring/decimal v1.3.1
 	github.com/spf13/cobra v1.5.0
 	github.com/spf13/viper v1.12.0
+	github.com/yaoxc/EasySwapBase v0.0.0-20260108033308-52f80c4135fe
 	github.com/zeromicro/go-zero v1.5.5
 	go.uber.org/zap v1.25.0
 	gorm.io/gorm v1.25.2
