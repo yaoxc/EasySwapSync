@@ -8,6 +8,18 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/common"
+
+	// 给这个包起个短名字（只在当前文件有效）,名字叫做 ethereumTypes，后面代码里就可以用：
+	/*
+		header := ethereumTypes.Header{}
+		block  := new(ethereumTypes.Block)
+	*/
+	// 而不用写冗长的 types.Header 或与其他 types 包产生名字冲突
+	ethereumTypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/pkg/errors"
+	"github.com/shopspring/decimal"
 	"github.com/yaoxc/EasySwapBase/chain/chainclient"
 	"github.com/yaoxc/EasySwapBase/chain/types"
 	"github.com/yaoxc/EasySwapBase/logger/xzap"
@@ -16,11 +28,9 @@ import (
 	"github.com/yaoxc/EasySwapBase/stores/gdb/orderbookmodel/base"
 	"github.com/yaoxc/EasySwapBase/stores/gdb/orderbookmodel/multi"
 	"github.com/yaoxc/EasySwapBase/stores/xkv"
-	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/common"
-	ethereumTypes "github.com/ethereum/go-ethereum/core/types"
-	"github.com/pkg/errors"
-	"github.com/shopspring/decimal"
+
+	// go-zero 框架提供的 “并发工具箱”，只干一件事：
+	// 让开发者用一两行代码就能安全地启动、管理、恢复 goroutine，同时自带 panic 捕获、日志、限流、池化等兜底能力。
 	"github.com/zeromicro/go-zero/core/threading"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -30,6 +40,9 @@ import (
 	"github.com/yaoxc/EasySwapSync/service/config"
 )
 
+// 在 Go 里，首字母小写 = 包内私有，首字母大写 = 包外可见
+// 让外部包能用，把需要暴露的常量改成`大写开头`即可
+// 下面常量标识符都是 首字母大写，在 Go 里属于 导出（exported）标识符，因此能被其他包通过包名引用(如 orderbookindexer.FixForCollection)
 const (
 	EventIndexType   = 6
 	SleepInterval    = 10 // in seconds
@@ -47,6 +60,17 @@ const (
 	ZeroAddress = "0x0000000000000000000000000000000000000000"
 )
 
+// Order 本身首字母大写 → 类型可导出；
+// 所有字段也都首字母大写 → 字段在包外同样可见
+// 其他包只要 import 就能直接：
+/**
+var o yourpkg.Order
+o.Side = 1
+o.Price = big.NewInt(1e18)
+*/
+/**
+可以看出来，下面加*号的，一般都是需要传递的（多个地方修改同一个值）
+*/
 type Order struct {
 	Side     uint8
 	SaleKind uint8
@@ -61,25 +85,46 @@ type Order struct {
 	Salt   uint64
 }
 
+// 定义一个名为 Service 的自定义结构体类型，
+// 用来把业务所需的所有“依赖/状态”打包在一起，方便在方法间传递和共享
+// abi.ABI: abi 是 包名（package name）, ABI 是 那个包里导出的类型名（type name，等价于“类”或“结构体”）
+/**
+可以看出来，下面加*号的，一般都是全局唯一的（单例）
+*/
 type Service struct {
-	ctx          context.Context
-	cfg          *config.Config
-	db           *gorm.DB
-	kv           *xkv.Store
-	orderManager *ordermanager.OrderManager
-	chainClient  chainclient.ChainClient
-	chainId      int64
-	chain        string
-	parsedAbi    abi.ABI
+	ctx          context.Context            // 上下文对象，用于控制协程的生命周期和传递请求范围的数据
+	cfg          *config.Config             //指向配置对象，解耦全局变量
+	db           *gorm.DB                   // 指向数据库连接对象,ORM 句柄，负责数据库操作
+	kv           *xkv.Store                 // 自己封装的 KV（Redis 等）客户端
+	orderManager *ordermanager.OrderManager // 订单管理器，用于处理订单相关的业务逻辑
+	chainClient  chainclient.ChainClient    // 区块链客户端，用于与区块链节点交互
+	chainId      int64                      // 链ID
+	chain        string                     // 链名称
+	parsedAbi    abi.ABI                    // 合约ABI对象，用于解析和编码合约数据
 }
 
+// 声明并初始化一个包级可见的变量
+// MultiChainMaxBlockDifference，类型为 map[string]uint64，用来记录每条链允许的最大区块滞后值
+// MultiChainMaxBlockDifference:  变量名，Go 里公开变量首字母大写，可被其他包引用。
+// 等价展开写法:
+/**
+var MultiChainMaxBlockDifference = make(map[string]uint64)
+func init() {
+	MultiChainMaxBlockDifference["eth"] = 1
+	MultiChainMaxBlockDifference["optimism"] = 2
+	MultiChainMaxBlockDifference["starknet"] = 1
+	MultiChainMaxBlockDifference["arbitrum"] = 2
+	MultiChainMaxBlockDifference["base"] = 2
+	MultiChainMaxBlockDifference["zksync-era"] = 2
+}
+*/
 var MultiChainMaxBlockDifference = map[string]uint64{
-	"eth":        1,
-	"optimism":   2,
-	"starknet":   1,
-	"arbitrum":   2,
-	"base":       2,
-	"zksync-era": 2,
+	"eth":        1, // 以太坊
+	"optimism":   2, //  Optimism（二层，中文仍叫“Optimism”或“OP 主网”）
+	"starknet":   1, // StarkNet（二层，中文仍叫“StarkNet”）
+	"arbitrum":   2, // Arbitrum（二层，中文仍叫“Arbitrum”或“Arbitrum 主网”）
+	"base":       2, // Base（Coinbase 推出的 L2，中文仍叫“Base”或“Base 主网”）
+	"zksync-era": 2, // zkSync Era（zkSync 推出的 L2，中文仍叫“zkSync Era”）
 }
 
 func New(ctx context.Context, cfg *config.Config, db *gorm.DB, xkv *xkv.Store, chainClient chainclient.ChainClient, chainId int64, chain string, orderManager *ordermanager.OrderManager) *Service {
@@ -97,6 +142,7 @@ func New(ctx context.Context, cfg *config.Config, db *gorm.DB, xkv *xkv.Store, c
 	}
 }
 
+// 给 Service 类型定义了一个 公开方法（首字母大写），外部可以 srv.Start() 调用
 func (s *Service) Start() {
 	threading.GoSafe(s.SyncOrderBookEventLoop)
 	threading.GoSafe(s.UpKeepingCollectionFloorChangeLoop)
