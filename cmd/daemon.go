@@ -24,10 +24,14 @@ var DaemonCmd = &cobra.Command{
 	Short: "sync easy swap order info.", // 简短描述
 	Long:  "sync easy swap order info.", // 详细描述
 	Run: func(cmd *cobra.Command, args []string) { // 命令执行入口
+		fmt.Println("==== daemon Run begin ====")
+
 		wg := &sync.WaitGroup{}                // 创建WaitGroup用于等待goroutine结束
 		wg.Add(1)                              // 增加计数
 		ctx := context.Background()            // 创建根context
 		ctx, cancel := context.WithCancel(ctx) // 创建可取消的context
+
+		fmt.Println("Starting EasySwapSync daemon...")
 
 		onSyncExit := make(chan error, 1) // 服务退出信号通道
 
@@ -99,10 +103,14 @@ var DaemonCmd = &cobra.Command{
 			xzap.WithContext(ctx).Error("Exit by error", zap.Error(err)) // 记录错误日志
 		}
 		wg.Wait() // 等待所有goroutine结束
+
+		fmt.Println("==== daemon Run end ====")
+
 	},
 }
 
 // init 函数将 DaemonCmd 注册到主命令
 func init() {
+	fmt.Println("执行到daemon类中")
 	rootCmd.AddCommand(DaemonCmd) // 注册子命令
 }
