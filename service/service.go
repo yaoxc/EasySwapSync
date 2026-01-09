@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/pkg/errors"
 	"github.com/yaoxc/EasySwapBase/chain"
 	"github.com/yaoxc/EasySwapBase/chain/chainclient"
 	"github.com/yaoxc/EasySwapBase/ordermanager"
 	"github.com/yaoxc/EasySwapBase/stores/xkv"
-	"github.com/pkg/errors"
 	"github.com/zeromicro/go-zero/core/stores/cache"
 	"github.com/zeromicro/go-zero/core/stores/kv"
 	"github.com/zeromicro/go-zero/core/stores/redis"
@@ -33,6 +33,8 @@ type Service struct {
 	orderManager     *ordermanager.OrderManager
 }
 
+// 构造方法：NewXXX() 初始化 struct
+// 通过 New() 方法创建实例，这是 Go 生态的标准写法
 func New(ctx context.Context, cfg *config.Config) (*Service, error) {
 	var kvConf kv.KvConf
 	for _, con := range cfg.Kv.Redis {

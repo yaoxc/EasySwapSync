@@ -6,11 +6,11 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
+	ethereumTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/yaoxc/EasySwapBase/chain/chainclient"
 	"github.com/yaoxc/EasySwapBase/chain/types"
 	"github.com/yaoxc/EasySwapBase/stores/gdb"
-	"github.com/ethereum/go-ethereum/common"
-	ethereumTypes "github.com/ethereum/go-ethereum/core/types"
 
 	"github.com/yaoxc/EasySwapSync/model"
 )
@@ -26,7 +26,6 @@ func TestSyncEvent(t *testing.T) {
 		MaxIdleConns: 10,
 		MaxOpenConns: 1500,
 	})
-
 	chainClient, _ := chainclient.New(10, "https://rpc.ankr.com/optimism/9c6c678ebcb56da1cb80f7632c7c02264831232c3d53453c7726a611e7ca36d7")
 	orderbookSyncer := New(ctx, nil, db, nil, chainClient, 10, "optimism", nil)
 
@@ -51,6 +50,10 @@ func TestSyncEvent(t *testing.T) {
 
 		}
 	}
+}
+
+func TestAAA(t *testing.T) {
+
 }
 
 func TestHandleMakeEvent(t *testing.T) {

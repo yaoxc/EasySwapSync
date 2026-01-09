@@ -127,6 +127,8 @@ var MultiChainMaxBlockDifference = map[string]uint64{
 	"zksync-era": 2, // zkSync Era（zkSync 推出的 L2，中文仍叫“zkSync Era”）
 }
 
+// New 是 Service 类型的构造函数，返回一个指向新创建的 Service 实例的指针
+// 【在New中，构造一个Service结构体的实例】
 func New(ctx context.Context, cfg *config.Config, db *gorm.DB, xkv *xkv.Store, chainClient chainclient.ChainClient, chainId int64, chain string, orderManager *ordermanager.OrderManager) *Service {
 	parsedAbi, _ := abi.JSON(strings.NewReader(contractAbi)) // 通过ABI实例化
 	return &Service{
@@ -143,12 +145,19 @@ func New(ctx context.Context, cfg *config.Config, db *gorm.DB, xkv *xkv.Store, c
 }
 
 // 给 Service 类型定义了一个 公开方法（首字母大写），外部可以 srv.Start() 调用
+// 这个 Start 方法是 orderbookindexer.Service（订单簿索引器）的启动入口
+// 通过 threading.GoSafe（go-zero 提供的「安全协程启动工具」），
+// 异步启动两个`常驻后台`的循环任务，实现`订单簿数据`的同步和`藏品地板价`的维护
 func (s *Service) Start() {
+	// 1. 启动「订单簿事件同步循环」（常驻协程）
 	threading.GoSafe(s.SyncOrderBookEventLoop)
+	// 2. 启动「藏品地板价维护循环」（常驻协程）
 	threading.GoSafe(s.UpKeepingCollectionFloorChangeLoop)
 }
 
+// 订单簿事件同步核心循环：持续从链上拉取指定区块范围的订单相关日志（Make/Cancel/Match），解析并处理，同时记录同步进度
 func (s *Service) SyncOrderBookEventLoop() {
+	// 1. 定义变量存储「区块索引状态」（用于记录上次同步到的区块高度，避免重复同步）
 	var indexedStatus base.IndexedStatus
 	if err := s.db.WithContext(s.ctx).Table(base.IndexedStatusTableName()).
 		Where("chain_id = ? and index_type = ?", s.chainId, EventIndexType).
