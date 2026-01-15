@@ -63,7 +63,7 @@ var DaemonCmd = &cobra.Command{
 			// 启动日志
 			xzap.WithContext(ctx).Info("sync server start", zap.Any("config", cfg))
 
-			// 创建服务实例
+			// 创建服务实例【初始化Redis 、DB、 chainClient】
 			s, err := service.New(ctx, cfg)
 			if err != nil {
 				xzap.WithContext(ctx).Error("Failed to create sync server", zap.Error(err)) // 服务创建失败
@@ -83,6 +83,7 @@ var DaemonCmd = &cobra.Command{
 			// 具体来说，http.ListenAndServe(fmt.Sprintf("0.0.0.0:%d", cfg.Monitor.PprofPort), nil) 会在指定端口启动一个 HTTP 服务器，
 			// 暴露 Go 的运行时性能分析接口（如 /debug/pprof），方便开发者通过浏览器或工具远程分析程序的 CPU、内存等性能数据，用于排查和优化性能瓶颈。
 			if cfg.Monitor.PprofEnable {
+				fmt.Println("Starting pprof server on port：", cfg.Monitor.PprofPort)
 				http.ListenAndServe(fmt.Sprintf("0.0.0.0:%d", cfg.Monitor.PprofPort), nil) // 启动pprof服务
 			}
 		}()

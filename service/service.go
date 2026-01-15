@@ -54,7 +54,8 @@ func New(ctx context.Context, cfg *config.Config) (*Service, error) {
 	kvStore := xkv.NewStore(kvConf) // 创建 KV 存储
 
 	var err error
-	db := model.NewDB(cfg.DB)                                                                  // 初始化数据库连接
+	db := model.NewDB(cfg.DB) // 初始化数据库连接
+
 	collectionFilter := collectionfilter.New(ctx, db, cfg.ChainCfg.Name, cfg.ProjectCfg.Name)  // 创建集合过滤器
 	orderManager := ordermanager.New(ctx, db, kvStore, cfg.ChainCfg.Name, cfg.ProjectCfg.Name) // 创建订单管理器
 	var orderbookSyncer *orderbookindexer.Service                                              // 订单簿同步器

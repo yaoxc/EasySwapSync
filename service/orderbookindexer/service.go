@@ -44,8 +44,8 @@ import (
 // 让外部包能用，把需要暴露的常量改成`大写开头`即可
 // 下面常量标识符都是 首字母大写，在 Go 里属于 导出（exported）标识符，因此能被其他包通过包名引用(如 orderbookindexer.FixForCollection)
 const (
-	EventIndexType   = 6
-	SleepInterval    = 10 // in seconds
+	EventIndexType   = 1
+	SleepInterval    = 50 // in seconds
 	SyncBlockPeriod  = 10
 	LogMakeTopic     = "0xfc37f2ff950f95913eb7182357ba3c14df60ef354bc7d6ab1ba2815f249fffe6"
 	LogCancelTopic   = "0x0ac8bb53fac566d7afc05d8b4df11d7690a7b27bdc40b54e4060f9b21fb849bd"
@@ -164,10 +164,13 @@ func (s *Service) SyncOrderBookEventLoop() {
 		First(&indexedStatus).Error; err != nil {
 		xzap.WithContext(s.ctx).Error("failed on get listing index status",
 			zap.Error(err))
+
+		fmt.Println("ERROR: ", err)
 		return
 	}
-
+	fmt.Println("区块索引状态: ", indexedStatus)
 	lastSyncBlock := uint64(indexedStatus.LastIndexedBlock)
+	fmt.Println("0 ---> 上次同步的区块高度: ", indexedStatus.LastIndexedBlock)
 	for {
 		select {
 		case <-s.ctx.Done():
@@ -176,39 +179,53 @@ func (s *Service) SyncOrderBookEventLoop() {
 		default:
 		}
 
-		currentBlockNum, err := s.chainClient.BlockNumber() // 以轮询的方式获取当前区块高度
+		// 以轮询的方式获取当前区块高度
+		currentBlockNum, err := s.chainClient.BlockNumber()
 		if err != nil {
+			fmt.Println("failed on get current block number :", err)
 			xzap.WithContext(s.ctx).Error("failed on get current block number", zap.Error(err))
 			time.Sleep(SleepInterval * time.Second)
 			continue
 		}
 
-		if lastSyncBlock > currentBlockNum-MultiChainMaxBlockDifference[s.chain] { // 如果上次同步的区块高度大于当前区块高度，等待一段时间后再次轮询
+		fmt.Println("查询到的currentBlockNum: ", currentBlockNum)
+		// 如果上次同步的区块高度大于当前区块高度，等待一段时间后再次轮询
+		if lastSyncBlock > currentBlockNum-MultiChainMaxBlockDifference[s.chain] {
 			time.Sleep(SleepInterval * time.Second)
 			continue
 		}
 
 		startBlock := lastSyncBlock
 		endBlock := startBlock + SyncBlockPeriod
-		if endBlock > currentBlockNum-MultiChainMaxBlockDifference[s.chain] { // 如果结束区块高度大于当前区块高度，将结束区块高度设置为当前区块高度
+		// 如果结束区块高度大于当前区块高度，将结束区块高度设置为当前区块高度
+		if endBlock > currentBlockNum-MultiChainMaxBlockDifference[s.chain] {
 			endBlock = currentBlockNum - MultiChainMaxBlockDifference[s.chain]
 		}
 
+		// 构造过滤查询条件【***重点理解***】
+		// fromBlock: 起始区块高度
+		// toBlock: 结束区块高度
+		// addresses: 只关注指定合约地址的日志
 		query := types.FilterQuery{
 			FromBlock: new(big.Int).SetUint64(startBlock),
 			ToBlock:   new(big.Int).SetUint64(endBlock),
 			Addresses: []string{s.cfg.ContractCfg.DexAddress},
 		}
 
-		logs, err := s.chainClient.FilterLogs(s.ctx, query) //同时获取多个（SyncBlockPeriod）区块的日志
+		// 同时获取多个（SyncBlockPeriod）区块的日志
+		// 调用链客户端的 FilterLogs 方法，根据过滤条件查询日志
+		logs, err := s.chainClient.FilterLogs(s.ctx, query)
 		if err != nil {
 			xzap.WithContext(s.ctx).Error("failed on get log", zap.Error(err))
+			fmt.Println("获取logs出错: ", err)
 			time.Sleep(SleepInterval * time.Second)
 			continue
 		}
+		fmt.Println("获取到的logs数量: ", len(logs))
 
 		for _, log := range logs { // 遍历日志，根据不同的topic处理不同的事件
 			ethLog := log.(ethereumTypes.Log)
+			fmt.Println("ethLog日志==>  BlockNo: ", ethLog.BlockNumber, "| Address: ", ethLog.Address.String(), "|   Topics[0] : ", ethLog.Topics[0].String())
 			switch ethLog.Topics[0].String() {
 			case LogMakeTopic:
 				s.handleMakeEvent(ethLog)
@@ -226,8 +243,10 @@ func (s *Service) SyncOrderBookEventLoop() {
 			Update("last_indexed_block", lastSyncBlock).Error; err != nil {
 			xzap.WithContext(s.ctx).Error("failed on update orderbook event sync block number",
 				zap.Error(err))
+			fmt.Println("更新lastSyncBlock 出错 : ", err)
 			return
 		}
+		fmt.Println("更新后的lastSyncBlock = : ", lastSyncBlock)
 
 		xzap.WithContext(s.ctx).Info("sync orderbook event ...",
 			zap.Uint64("start_block", startBlock),
@@ -343,11 +362,52 @@ func (s *Service) handleMakeEvent(log ethereumTypes.Log) {
 }
 
 func (s *Service) handleMatchEvent(log ethereumTypes.Log) {
+	/* Solidity 事件定义:
+			event LogMatch(
+		        OrderKey indexed makeOrderKey,
+		        OrderKey indexed takeOrderKey,
+		        LibOrder.Order makeOrder,
+		        LibOrder.Order takeOrder,
+		        uint128 fillPrice
+		    );
+
+	    struct Order {
+	        Side side;
+	        SaleKind saleKind;
+	        address maker;
+	        Asset nft;
+	        Price price; // unit price of nft
+	        uint64 expiry;
+	        uint64 salt;
+	    }
+
+		struct Asset {
+	        uint256 tokenId;
+	        address collection;
+	        uint96 amount;
+	    }
+	*/
 	var event struct {
 		MakeOrder Order
 		TakeOrder Order
 		FillPrice *big.Int
 	}
+
+	/*
+			type Order struct {
+			Side     uint8
+			SaleKind uint8
+			Maker    common.Address
+			Nft      struct {
+				TokenId        *big.Int
+				CollectionAddr common.Address
+				Amount         *big.Int
+			}
+			Price  *big.Int
+			Expiry uint64
+			Salt   uint64
+		}
+	*/
 
 	err := s.parsedAbi.UnpackIntoInterface(&event, "LogMatch", log.Data)
 	if err != nil {
@@ -355,7 +415,8 @@ func (s *Service) handleMatchEvent(log ethereumTypes.Log) {
 		return
 	}
 
-	makeOrderId := HexPrefix + hex.EncodeToString(log.Topics[1].Bytes()) // 通过topic获取订单ID
+	// 通过topic获取订单ID
+	makeOrderId := HexPrefix + hex.EncodeToString(log.Topics[1].Bytes())
 	takeOrderId := HexPrefix + hex.EncodeToString(log.Topics[2].Bytes())
 	var owner string
 	var collection string
