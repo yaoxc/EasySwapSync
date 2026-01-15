@@ -308,12 +308,12 @@ func (s *Service) handleMakeEvent(log ethereumTypes.Log) {
 	var orderType int64
 	if side == Bid { // 买单
 		if saleKind == FixForCollection { // 针对集合的买单
-			orderType = multi.CollectionBidOrder
+			orderType = multi.CollectionBidOrder // 集合买单
 		} else { // 针对某个具体NFT的买单
-			orderType = multi.ItemBidOrder
+			orderType = multi.ItemBidOrder // 单品买单
 		}
 	} else { // 卖单
-		orderType = multi.ListingOrder
+		orderType = multi.ListingOrder // 挂单
 	}
 	newOrder := multi.Order{
 		CollectionAddress: event.Nft.CollectionAddr.String(),
@@ -334,12 +334,14 @@ func (s *Service) handleMakeEvent(log ethereumTypes.Log) {
 		Salt:              int64(event.Salt),        // 随机数，防止订单ID冲突
 	}
 	// GORM框架中的"冲突处理"写法，用于保证数据唯一性，防止重复插入
+	// 原子性操作，避免并发问题
 	if err := s.db.WithContext(s.ctx).Table(multi.OrderTableName(s.chain)).Clauses(clause.OnConflict{
 		DoNothing: true,
 	}).Create(&newOrder).Error; err != nil { // 将订单信息存入数据库
 		xzap.WithContext(s.ctx).Error("failed on create order",
 			zap.Error(err))
 	}
+	// 记录活动日志，方便后续统计
 	blockTime, err := s.chainClient.BlockTimeByNumber(s.ctx, big.NewInt(int64(log.BlockNumber)))
 	if err != nil {
 		xzap.WithContext(s.ctx).Error("failed to get block time", zap.Error(err))
@@ -348,12 +350,12 @@ func (s *Service) handleMakeEvent(log ethereumTypes.Log) {
 	var activityType int
 	if side == Bid {
 		if saleKind == FixForCollection {
-			activityType = multi.CollectionBid
+			activityType = multi.CollectionBid // 集合买单
 		} else {
-			activityType = multi.ItemBid
+			activityType = multi.ItemBid // 具体藏品买单(单品买单)
 		}
 	} else {
-		activityType = multi.Listing
+		activityType = multi.Listing // 挂单
 	}
 	newActivity := multi.Activity{ // 将订单信息存入活动表
 		ActivityType:      activityType,
@@ -368,6 +370,7 @@ func (s *Service) handleMakeEvent(log ethereumTypes.Log) {
 		TxHash:            log.TxHash.String(),
 		EventTime:         int64(blockTime), // 区块时间戳
 	}
+	// 插入活动信息
 	if err := s.db.WithContext(s.ctx).Table(multi.ActivityTableName(s.chain)).Clauses(clause.OnConflict{
 		DoNothing: true,
 	}).Create(&newActivity).Error; err != nil {
@@ -392,29 +395,30 @@ func (s *Service) handleMakeEvent(log ethereumTypes.Log) {
 
 func (s *Service) handleMatchEvent(log ethereumTypes.Log) {
 	/* Solidity 事件定义:
-			event LogMatch(
-		        OrderKey indexed makeOrderKey,
-		        OrderKey indexed takeOrderKey,
-		        LibOrder.Order makeOrder,
-		        LibOrder.Order takeOrder,
-		        uint128 fillPrice
-		    );
+		event LogMatch(
+	        OrderKey indexed makeOrderKey,
+	        OrderKey indexed takeOrderKey,
+	        LibOrder.Order makeOrder,
+	        LibOrder.Order takeOrder,
+	        uint128 fillPrice
+	    );
+	*/
+	/*
+			struct Order {
+		        Side side;
+		        SaleKind saleKind;
+		        address maker;
+		        Asset nft;
+		        Price price; // unit price of nft
+		        uint64 expiry;
+		        uint64 salt;
+		    }
 
-	    struct Order {
-	        Side side;
-	        SaleKind saleKind;
-	        address maker;
-	        Asset nft;
-	        Price price; // unit price of nft
-	        uint64 expiry;
-	        uint64 salt;
-	    }
-
-		struct Asset {
-	        uint256 tokenId;
-	        address collection;
-	        uint96 amount;
-	    }
+			struct Asset {
+		        uint256 tokenId;
+		        address collection;
+		        uint96 amount;
+		    }
 	*/
 	var event struct {
 		MakeOrder Order
@@ -444,25 +448,27 @@ func (s *Service) handleMatchEvent(log ethereumTypes.Log) {
 		return
 	}
 
-	// 通过topic获取订单ID
+	// 原始订单ID，从事件日志的第一个topic中解析得到
 	makeOrderId := HexPrefix + hex.EncodeToString(log.Topics[1].Bytes())
+	// 接单订单ID，从事件日志的第二个topic中解析得到
 	takeOrderId := HexPrefix + hex.EncodeToString(log.Topics[2].Bytes())
-	var owner string
-	var collection string
-	var tokenId string
-	var from string
-	var to string
-	var sellOrderId string
-	var buyOrder multi.Order
-	if event.MakeOrder.Side == Bid { // 买单， 由卖方发起交易撮合
-		owner = strings.ToLower(event.MakeOrder.Maker.String())
+	var owner string                 // NFT交易后的新所有者地址
+	var collection string            // NFT所属的集合合约地址
+	var tokenId string               // 被交易的NFT的唯一标识符
+	var from string                  // NFT转出方地址
+	var to string                    // NFT接收方地址
+	var sellOrderId string           // 卖方(卖NFT的)订单的唯一标识符，用于后续价格更新
+	var buyOrder multi.Order         // 买单的详细信息结构体，包含订单状态、数量等信息
+	if event.MakeOrder.Side == Bid { // 下单人是买单(买NFT)， 由卖方(卖NFT)发起交易撮合
+		owner = strings.ToLower(event.MakeOrder.Maker.String()) // NFT最终归属人
 		collection = event.TakeOrder.Nft.CollectionAddr.String()
 		tokenId = event.TakeOrder.Nft.TokenId.String()
 		from = event.TakeOrder.Maker.String()
 		to = event.MakeOrder.Maker.String()
-		sellOrderId = takeOrderId
+		sellOrderId = takeOrderId // 卖方(卖NFT的)订单的唯一标识符
 
 		// 更新卖方订单状态
+		// 卖NFT的订单，直接全部成交，状态改为已完成【原因见第17个文档】
 		if err := s.db.WithContext(s.ctx).Table(multi.OrderTableName(s.chain)).
 			Where("order_id = ?", takeOrderId).
 			Updates(map[string]interface{}{
@@ -504,8 +510,8 @@ func (s *Service) handleMatchEvent(log ethereumTypes.Log) {
 				return
 			}
 		}
-	} else { // 卖单， 由买方发起交易撮合， 同理
-		owner = strings.ToLower(event.TakeOrder.Maker.String())
+	} else { // 卖单， takeOrder就是买方，发起交易撮合， 同理
+		owner = strings.ToLower(event.TakeOrder.Maker.String()) // NFT最终归属人
 		collection = event.MakeOrder.Nft.CollectionAddr.String()
 		tokenId = event.MakeOrder.Nft.TokenId.String()
 		from = event.MakeOrder.Maker.String()
@@ -603,8 +609,15 @@ func (s *Service) handleMatchEvent(log ethereumTypes.Log) {
 }
 
 func (s *Service) handleCancelEvent(log ethereumTypes.Log) {
+	/*
+		Solidity 事件定义:
+		event LogCancel(OrderKey indexed orderKey, address indexed maker);
+	*/
+
 	orderId := HexPrefix + hex.EncodeToString(log.Topics[1].Bytes())
 	//maker := common.BytesToAddress(log.Topics[2].Bytes())
+
+	// 更新订单状态为已取消
 	if err := s.db.WithContext(s.ctx).Table(multi.OrderTableName(s.chain)).
 		Where("order_id = ?", orderId).
 		Update("order_status", multi.OrderStatusCancelled).Error; err != nil {
