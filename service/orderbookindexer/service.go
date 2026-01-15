@@ -44,7 +44,7 @@ import (
 // 让外部包能用，把需要暴露的常量改成`大写开头`即可
 // 下面常量标识符都是 首字母大写，在 Go 里属于 导出（exported）标识符，因此能被其他包通过包名引用(如 orderbookindexer.FixForCollection)
 const (
-	EventIndexType   = 1
+	EventIndexType   = 6
 	SleepInterval    = 50 // in seconds
 	SyncBlockPeriod  = 10
 	LogMakeTopic     = "0xfc37f2ff950f95913eb7182357ba3c14df60ef354bc7d6ab1ba2815f249fffe6"
@@ -190,6 +190,7 @@ func (s *Service) SyncOrderBookEventLoop() {
 
 		fmt.Println("查询到的currentBlockNum: ", currentBlockNum)
 		// 如果上次同步的区块高度大于当前区块高度，等待一段时间后再次轮询
+		// 留出区块间隔，避免同步到最新区块，确保数据稳定性【防止最新区块数据没有ch】
 		if lastSyncBlock > currentBlockNum-MultiChainMaxBlockDifference[s.chain] {
 			time.Sleep(SleepInterval * time.Second)
 			continue
@@ -256,6 +257,31 @@ func (s *Service) SyncOrderBookEventLoop() {
 
 // 处理挂单事件
 func (s *Service) handleMakeEvent(log ethereumTypes.Log) {
+	/* Solidity 事件定义:
+		    // 挂新订单
+	    event LogMake(
+	        OrderKey orderKey,
+	        LibOrder.Side indexed side,
+	        LibOrder.SaleKind indexed saleKind,
+	        address indexed maker,
+	        LibOrder.Asset nft,
+	        Price price,
+	        uint64 expiry,
+	        uint64 salt
+	    );
+
+
+			struct Order {
+		        Side side;
+		        SaleKind saleKind;
+		        address maker;
+		        Asset nft;
+		        Price price; // unit price of nft
+		        uint64 expiry;
+		        uint64 salt;
+		    }
+	*/
+
 	var event struct {
 		OrderKey [32]byte
 		Nft      struct {
@@ -347,6 +373,7 @@ func (s *Service) handleMakeEvent(log ethereumTypes.Log) {
 			zap.Error(err))
 	}
 
+	// 挂单、取消订单，可能对nft的价格产生影响，所以放到队列中，稍后处理
 	if err := s.orderManager.AddToOrderManagerQueue(&multi.Order{ // 将订单信息存入订单管理队列
 		ExpireTime:        newOrder.ExpireTime,
 		OrderID:           newOrder.OrderID,
