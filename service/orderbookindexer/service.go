@@ -323,15 +323,17 @@ func (s *Service) handleMakeEvent(log ethereumTypes.Log) {
 		OrderStatus:       multi.OrderStatusActive,
 		EventTime:         time.Now().Unix(),
 		ExpireTime:        int64(event.Expiry),
-		CurrencyAddress:   s.cfg.ContractCfg.EthAddress,
-		Price:             decimal.NewFromBigInt(event.Price, 0),
-		Maker:             maker.String(),
-		Taker:             ZeroAddress,
-		QuantityRemaining: event.Nft.Amount.Int64(),
-		Size:              event.Nft.Amount.Int64(),
-		OrderType:         orderType,
-		Salt:              int64(event.Salt),
+		CurrencyAddress:   s.cfg.ContractCfg.EthAddress,          // 支付代币合约地址
+		Price:             decimal.NewFromBigInt(event.Price, 0), // 出价
+		Maker:             maker.String(),                        // 挂单者地址
+		Taker:             ZeroAddress,                           // 买家地址
+		// 表示订单中尚未成交的NFT数量
+		QuantityRemaining: event.Nft.Amount.Int64(), // 剩余数量
+		Size:              event.Nft.Amount.Int64(), // 订单总数量
+		OrderType:         orderType,                // 订单类型
+		Salt:              int64(event.Salt),        // 随机数，防止订单ID冲突
 	}
+	// GORM框架中的"冲突处理"写法，用于保证数据唯一性，防止重复插入
 	if err := s.db.WithContext(s.ctx).Table(multi.OrderTableName(s.chain)).Clauses(clause.OnConflict{
 		DoNothing: true,
 	}).Create(&newOrder).Error; err != nil { // 将订单信息存入数据库
@@ -364,7 +366,7 @@ func (s *Service) handleMakeEvent(log ethereumTypes.Log) {
 		Price:             decimal.NewFromBigInt(event.Price, 0),
 		BlockNumber:       int64(log.BlockNumber),
 		TxHash:            log.TxHash.String(),
-		EventTime:         int64(blockTime),
+		EventTime:         int64(blockTime), // 区块时间戳
 	}
 	if err := s.db.WithContext(s.ctx).Table(multi.ActivityTableName(s.chain)).Clauses(clause.OnConflict{
 		DoNothing: true,
